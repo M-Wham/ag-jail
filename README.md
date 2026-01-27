@@ -103,3 +103,22 @@ The jail acts like a fresh computer and does not have access to your host SSH ke
 
 - **Servers:** When running servers (e.g., `npm run dev` or Python), use `--host` or bind to `0.0.0.0` to ensure the port is accessible.
 - **Browser:** The environment uses an internal Chrome instance. Links clicked inside the IDE will open in the jail window.
+
+## Installing Additional Software
+
+Because **ag-jail** is a completely isolated environment, it does not see the software installed on your main system. If you need specific tools (like Python, Node.js, Go, or Vim) inside the IDE, you must install them inside the jail.
+
+1.  **Enter the jail shell:**
+    ```bash
+    distrobox enter ag-safe
+    ```
+
+2.  **Install packages:**
+    *(This is an **example** installing Python and Git. Replace these with the packages you actually need.)*
+    ```bash
+    sudo apt update
+    sudo apt install python3 git
+    ```
+
+3.  **Done:**
+    You can now `exit` the terminal. The next time you run `ag-start`, your tools will be available inside the IDE.
