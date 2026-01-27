@@ -1,124 +1,146 @@
-# ag-jail
+ag-jail
 
-A secure, isolated environment for running the **Google Antigravity IDE** on Linux.
+A secure, isolated environment for running the Google Antigravity IDE on Linux.
 
-**ag-jail** uses **Podman** and **Distrobox** to run the IDE in a restricted container. It keeps your main system clean, prevents background agents from persisting after exit, and ensures the IDE cannot access your personal files (SSH keys, Documents, etc.) unless explicitly allowed.
+ag-jail uses Podman and Distrobox to run the IDE in a restricted container. It keeps your main system clean, prevents background agents from persisting after exit, and ensures the IDE cannot access your personal files (SSH keys, Documents, etc.) unless explicitly allowed.
 
 This tool was created as I tried to use Antigravity on my desktop but I was getting frustrated at the background processes and how they are persistent. Personally, I don't like things like this running in the background, seemingly for no reason. I find it invasive and suspicious, not to mention it is hogging resources you could be using to compile Chromium for the 23rd time.
 
-**Note:** This setup does install a dedicated instance of Google Chrome, but it is completely sandboxed inside the container. It is used exclusively by the IDE and the Agent, meaning it has zero access to your host browser's history, cookies, or personal data.
+Note: This setup does install a dedicated instance of Google Chrome, but it is completely sandboxed inside the container. It is used exclusively by the IDE and the Agent, meaning it has zero access to your host browser's history, cookies, or personal data.
 
-## Features
+FEATURES
 
-- **True Isolation:** The IDE sees `~/Antigravity-Jail` as its home folder.
-- **Zero Persistence:** `ag-kill` instantly stops all background agents.
-- **Internal Browser:** Automatically installs Chrome inside the jail for the AI Agent.
-- **Automated Install:** Adds the official Google repositories and keys automatically.
+- True Isolation: The IDE sees ~/Antigravity-Jail as its home folder.
+- Zero Persistence: ag-kill instantly stops all background agents.
+- Internal Browser: Automatically installs Chrome inside the jail for the AI Agent.
+- Automated Install: Adds the official Google repositories and keys automatically.
 
-## Prerequisites
+PREREQUISITES
 
-Before running the installer, you must have **Podman** and **Distrobox** installed on your system. Click your distribution below for instructions.
+Before running the installer, you must have Podman and Distrobox installed.
 
-<details>
-<summary><strong>Debian, Ubuntu, Linux Mint, Pop!_OS</strong></summary>
+Debian, Ubuntu, Linux Mint, Pop!_OS:
 
 ```bash
 sudo apt update
-sudo apt install podman distrobox
+sudo apt install -y podman distrobox
 ```
 
-</details>
-
-<details>
-<summary><strong>Arch Linux, Manjaro, EndeavourOS</strong></summary>
+Arch Linux, Manjaro, EndeavourOS:
 
 ```bash
 sudo pacman -S podman distrobox
 ```
 
-</details>
-
-<details>
-<summary><strong>Fedora, CentOS, AlmaLinux</strong></summary>
+Fedora, CentOS, AlmaLinux:
 
 ```bash
-sudo dnf install podman distrobox
+sudo dnf install -y podman distrobox
 ```
 
-</details>
-
-<details>
-<summary><strong>openSUSE</strong></summary>
+openSUSE:
 
 ```bash
-sudo zypper install podman distrobox
+sudo zypper install -y podman distrobox
 ```
 
-</details>
+INSTALLATION
 
-## Installation
+1. Clone this repository
 
-1.  **Clone this repository**
+```bash
+git clone https://github.com/M-Wham/ag-jail.git
+cd ag-jail
+```
 
-    ```bash
-    git clone [https://github.com/M-Wham/ag-jail.git](https://github.com/M-Wham/ag-jail.git)
-    cd ag-jail
-    ```
+2. Run the installer
 
-2.  **Run the installer**
+```bash
+chmod +x install.sh
+./install.sh
+```
 
-    ```bash
-    chmod +x install.sh
-    ./install.sh
-    ```
+USAGE
 
-## Usage
+ag-start
+Start Work. Launches the IDE.
 
-| Command         | Action                                                                  |
-| :-------------- | :---------------------------------------------------------------------- |
-| **`ag-start`**  | **Start Work.** Launches the IDE.                                       |
-| **`ag-kill`**   | **Stop Work.** Instantly kills the container and all background agents. |
-| **`ag-update`** | **Update.** Run this when the IDE notifies you of an update.            |
+```bash
+ag-start
+```
 
-## Configuration
+ag-kill
+Stop Work. Instantly kills the container and all background agents.
 
-### Git & SSH
+```bash
+ag-kill
+```
 
+ag-update
+Update. Run this when the IDE notifies you of an update.
+
+```bash
+ag-update
+```
+
+CONFIGURATION
+
+Git & SSH
 The jail acts like a fresh computer and does not have access to your host SSH keys by default.
 
-1.  **Enter the jail shell:**
-    ```bash
-    distrobox enter ag-safe
-    ```
-2.  **Configure Git identity:**
-    ```bash
-    git config --global user.name "Your Name"
-    git config --global user.email "you@example.com"
-    ```
-3.  **Set up SSH keys:**
-    - _Option A (Copy from host):_ `cp ~/.ssh/id_ed25519* ~/Antigravity-Jail/.ssh/`
-    - _Option B (Generate new):_ `ssh-keygen -t ed25519 -C "ag-jail-key"`
+1. Enter the jail shell:
 
-### Web Development
+```bash
+distrobox enter ag-safe
+```
 
-- **Servers:** When running servers (e.g., `npm run dev` or Python), use `--host` or bind to `0.0.0.0` to ensure the port is accessible.
-- **Browser:** The environment uses an internal Chrome instance. Links clicked inside the IDE will open in the jail window.
+2. Configure Git identity:
 
-## Installing Additional Software
+```bash
+git config --global user.name "Your Name"
+git config --global user.email "you@example.com"
+```
 
-Because **ag-jail** is a completely isolated environment, it does not see the software installed on your main system. If you need specific tools (like Python, Node.js, Go, or Vim) inside the IDE, you must install them inside the jail.
+3. Set up SSH keys:
 
-1.  **Enter the jail shell:**
-    ```bash
-    distrobox enter ag-safe
-    ```
+Option A (Copy from host):
 
-2.  **Install packages:**
-    *(This is an **example** installing Python and Git. Replace these with the packages you actually need.)*
-    ```bash
-    sudo apt update
-    sudo apt install python3 git
-    ```
+```bash
+mkdir -p ~/Antigravity-Jail/.ssh
+cp ~/.ssh/id_ed25519* ~/Antigravity-Jail/.ssh/
+```
 
-3.  **Done:**
-    You can now `exit` the terminal. The next time you run `ag-start`, your tools will be available inside the IDE.
+Option B (Generate new):
+
+```bash
+ssh-keygen -t ed25519 -C "ag-jail-key"
+```
+
+Web Development
+
+Servers:
+When running servers (e.g., npm run dev or Python), use --host or bind to 0.0.0.0 to ensure the port is accessible.
+
+Browser:
+The environment uses an internal Chrome instance. Links clicked inside the IDE will open in the jail window.
+
+INSTALLING ADDITIONAL SOFTWARE
+
+Because ag-jail is a completely isolated environment, it does not see the software installed on your main system. If you need specific tools (like Python, Node.js, Go, or Vim) inside the IDE, you must install them inside the jail.
+
+1. Enter the jail shell:
+
+```bash
+distrobox enter ag-safe
+```
+
+2. Install packages:
+(This is an example installing Python and Git. Replace these with the packages you actually need.)
+
+```bash
+sudo apt update
+sudo apt install -y python3 git
+```
+
+3. Done:
+You can now exit the terminal. The next time you run ag-start, your tools will be available inside the IDE.
