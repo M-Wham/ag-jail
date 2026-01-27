@@ -69,7 +69,7 @@ distrobox-export --app podman
 1.  **Clone this repository**
 
     ```bash
-    git clone [https://github.com/YOUR_USERNAME/ag-jail.git](https://github.com/YOUR_USERNAME/ag-jail.git)
+    git clone [https://github.com/M-Wham/ag-jail.git](https://github.com/M-Wham/ag-jail.git)
     cd ag-jail
     ```
 
