@@ -6,6 +6,8 @@ A secure, isolated environment for running the **Google Antigravity IDE** on Lin
 
 This tool was created as I tried to use Antigravity on my desktop but I was getting frustrated at the background processes and how they are persistent. Personally, I don't like things like this running in the background, seemingly for no reason. I find it invasive and suspicious, not to mention it is hogging resources you could be using to compile Chromium for the 23rd time.
 
+Note: This setup does install a dedicated instance of Google Chrome, but it is completely sandboxed inside the container. It is used exclusively by the IDE and the Agent, meaning it has zero access to your host browser's history, cookies, or personal data."
+
 ## Features
 
 - **True Isolation:** The IDE sees `~/Antigravity-Jail` as its home folder.
