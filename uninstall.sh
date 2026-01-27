@@ -12,7 +12,9 @@ podman rm "$CONTAINER_NAME" 2>/dev/null
 echo "✔ Container removed"
 
 # 2. Remove binaries
-rm -f "$BIN_DIR/ag-start" "$BIN_DIR/ag-kill" "$BIN_DIR/ag-update"
+rm -f "$BIN_DIR/ag-start" \
+	"$BIN_DIR/ag-kill" \
+	"$BIN_DIR/ag-update"
 echo "✔ Binaries removed"
 
 # 3. Optional: Remove data

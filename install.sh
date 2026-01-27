@@ -44,16 +44,35 @@ echo -e "${YELLOW}[3/6] Building container (This may take a minute)...${NC}"
 if distrobox list | grep -q "$CONTAINER_NAME"; then
 	echo "Container exists, skipping creation." >>"$LOG_FILE"
 else
-	distrobox create --name "$CONTAINER_NAME" --image public.ecr.aws/lts/ubuntu:22.04 --home "$JAIL_DIR" --yes >>"$LOG_FILE" 2>&1
+	distrobox create --name "$CONTAINER_NAME" \
+		--image public.ecr.aws/lts/ubuntu:22.04 \
+		--home "$JAIL_DIR" \
+		--yes >>"$LOG_FILE" 2>&1
 fi
 
 # STEP 4: Internal Chrome
 echo -e "${YELLOW}[4/6] Installing Internal Chrome...${NC}"
-distrobox enter "$CONTAINER_NAME" -- sh -c "if ! command -v google-chrome > /dev/null 2>&1; then wget -q -O chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && sudo apt-get update -qq && sudo apt-get install -y ./chrome.deb -qq && rm chrome.deb && xdg-settings set default-web-browser google-chrome.desktop; fi" >>"$LOG_FILE" 2>&1
+distrobox enter "$CONTAINER_NAME" -- sh -c " \
+    if ! command -v google-chrome > /dev/null 2>&1; then \
+        wget -q -O chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && \
+        sudo apt-get update -qq && \
+        sudo apt-get install -y ./chrome.deb -qq && \
+        rm chrome.deb && \
+        xdg-settings set default-web-browser google-chrome.desktop; \
+    fi" >>"$LOG_FILE" 2>&1
 
 # STEP 5: Antigravity
 echo -e "${YELLOW}[5/6] Installing Antigravity...${NC}"
-distrobox enter "$CONTAINER_NAME" -- sh -c "if ! command -v antigravity > /dev/null 2>&1; then sudo mkdir -p /etc/apt/keyrings && curl -fsSL https://us-central1-apt.pkg.dev/doc/repo-signing-key.gpg | sudo gpg --dearmor --yes -o /etc/apt/keyrings/antigravity-repo-key.gpg && echo 'deb [signed-by=/etc/apt/keyrings/antigravity-repo-key.gpg] https://us-central1-apt.pkg.dev/projects/antigravity-auto-updater-dev antigravity-debian main' | sudo tee /etc/apt/sources.list.d/antigravity.list > /dev/null && sudo apt-get update -qq && sudo apt-get install -y antigravity -qq; fi" >>"$LOG_FILE" 2>&1
+distrobox enter "$CONTAINER_NAME" -- sh -c " \
+    if ! command -v antigravity > /dev/null 2>&1; then \
+        sudo mkdir -p /etc/apt/keyrings && \
+        curl -fsSL https://us-central1-apt.pkg.dev/doc/repo-signing-key.gpg | \
+            sudo gpg --dearmor --yes -o /etc/apt/keyrings/antigravity-repo-key.gpg && \
+        echo 'deb [signed-by=/etc/apt/keyrings/antigravity-repo-key.gpg] https://us-central1-apt.pkg.dev/projects/antigravity-auto-updater-dev antigravity-debian main' | \
+            sudo tee /etc/apt/sources.list.d/antigravity.list > /dev/null && \
+        sudo apt-get update -qq && \
+        sudo apt-get install -y antigravity -qq; \
+    fi" >>"$LOG_FILE" 2>&1
 
 # STEP 6: Binaries
 echo -e "${YELLOW}[6/6] Finalizing setup...${NC}"
@@ -71,7 +90,8 @@ chmod +x "$BIN_DIR/ag-kill"
 
 # ag-update
 echo '#!/bin/sh' >"$BIN_DIR/ag-update"
-echo "distrobox enter $CONTAINER_NAME -- sh -c \"sudo apt update && sudo apt install antigravity -y\"" >>"$BIN_DIR/ag-update"
+echo "distrobox enter $CONTAINER_NAME -- sh -c \"sudo apt update && sudo apt install antigravity -y\"" \
+	>>"$BIN_DIR/ag-update"
 chmod +x "$BIN_DIR/ag-update"
 
 echo -e "\n${GREEN}✔ Installation Complete!${NC}"
