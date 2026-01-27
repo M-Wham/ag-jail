@@ -54,18 +54,6 @@ sudo zypper install podman distrobox
 
 </details>
 
-<details>
-<summary><strong>SteamOS (Steam Deck)</strong></summary>
-
-Distrobox is often pre-installed or available via Podman.
-
-```bash
-# If not installed:
-distrobox-export --app podman
-```
-
-</details>
-
 ## Installation
 
 1.  **Clone this repository**
