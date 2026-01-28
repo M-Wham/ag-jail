@@ -2,7 +2,7 @@ ag-jail
 
 Demo:
 
-https://github.com/user-attachments/assets/04db4178-c04c-45e4-9c29-1aa004985be9
+https://github.com/user-attachments/assets/c92ac49b-d960-47ec-b1f3-ddc1bfe964cc
 
 A secure, isolated environment for running the Google Antigravity IDE on Linux.
 
