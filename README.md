@@ -1,5 +1,9 @@
 ag-jail
 
+Demo:
+
+https://github.com/user-attachments/assets/04db4178-c04c-45e4-9c29-1aa004985be9
+
 A secure, isolated environment for running the Google Antigravity IDE on Linux.
 
 ag-jail uses Podman and Distrobox to run the IDE in a restricted container. It keeps your main system clean, prevents background agents from persisting after exit, and ensures the IDE cannot access your personal files (SSH keys, Documents, etc.) unless explicitly allowed.
