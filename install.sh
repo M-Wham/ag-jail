@@ -36,6 +36,21 @@ if ! command -v podman &>/dev/null; then
 	echo -e "${RED}Error: Podman is not installed. Please install podman first.${NC}"
 	exit 1
 fi
+if ! command -v slirp4netns &>/dev/null; then
+	echo -e "${YELLOW}slirp4netns not found, attempting to install...${NC}"
+	if command -v pacman &>/dev/null; then
+		sudo pacman -S --noconfirm slirp4netns >>"$LOG_FILE" 2>&1
+	elif command -v apt-get &>/dev/null; then
+		sudo apt-get install -y slirp4netns >>"$LOG_FILE" 2>&1
+	elif command -v dnf &>/dev/null; then
+		sudo dnf install -y slirp4netns >>"$LOG_FILE" 2>&1
+	elif command -v zypper &>/dev/null; then
+		sudo zypper install -y slirp4netns >>"$LOG_FILE" 2>&1
+	else
+		echo -e "${RED}Could not install slirp4netns automatically. Please install it manually.${NC}"
+		exit 1
+	fi
+fi
 if ! command -v xhost &>/dev/null; then
 	echo -e "${YELLOW}xhost not found, attempting to install...${NC}"
 	if command -v pacman &>/dev/null; then

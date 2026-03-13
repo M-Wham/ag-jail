@@ -22,22 +22,22 @@ Only Podman is required.
 
 **Debian, Ubuntu, Linux Mint, Pop!_OS**
 ```bash
-sudo apt update && sudo apt install -y podman x11-xserver-utils
+sudo apt update && sudo apt install -y podman x11-xserver-utils slirp4netns
 ```
 
 **Arch Linux, Manjaro, EndeavourOS**
 ```bash
-sudo pacman -S podman xorg-xhost
+sudo pacman -S podman xorg-xhost slirp4netns
 ```
 
 **Fedora, CentOS, AlmaLinux**
 ```bash
-sudo dnf install -y podman xorg-x11-server-utils
+sudo dnf install -y podman xorg-x11-server-utils slirp4netns
 ```
 
 **openSUSE**
 ```bash
-sudo zypper install -y podman xhost
+sudo zypper install -y podman xhost slirp4netns
 ```
 
 ## Installation
