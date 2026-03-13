@@ -98,6 +98,7 @@ if [ "$CONTAINER_NEEDS_CREATE" = true ]; then
 		--hostname ag-jail \
 		--init \
 		--userns=keep-id \
+		--workdir / \
 		--network slirp4netns:allow_host_loopback=true \
 		--dns 1.1.1.1 \
 		--dns 8.8.8.8 \
@@ -195,13 +196,14 @@ echo -e "${YELLOW}[7/7] Writing binaries...${NC}"
 # - Stops the container when Antigravity exits (kills any lingering background agents)
 cat >"$BIN_DIR/ag-start" <<SCRIPT
 #!/bin/bash
+cd /
 xhost +local: 2>/dev/null || true
 echo "Starting container..."
 podman start ag-safe
 # Remove stale Antigravity IPC sockets so a fresh instance always opens cleanly
 podman exec ag-safe pkill -9 antigravity 2>/dev/null || true
 rm -f /run/user/\$(id -u)/vscode-*.sock 2>/dev/null || true
-echo "Launching Antigravity..."
+echo "Launching Antigravity (window may take 30-60 seconds to appear)..."
 podman exec \\
 	--user $HOST_USER \\
 	-e DISPLAY="\${DISPLAY:-:0}" \\
@@ -210,7 +212,7 @@ podman exec \\
 	-e DBUS_SESSION_BUS_ADDRESS="" \\
 	-e HOME="/home/$HOST_USER" \\
 	ag-safe \\
-	antigravity "\$@"
+	bash -c 'cd /home/$HOST_USER && exec antigravity "\$@"' -- "\$@"
 podman stop ag-safe > /dev/null
 SCRIPT
 chmod +x "$BIN_DIR/ag-start"
@@ -242,6 +244,7 @@ if ! podman ps --format '{{.Names}}' | grep -q '^ag-safe$'; then
 fi
 podman exec -it \\
 	--user $HOST_USER \\
+	--workdir /home/$HOST_USER \\
 	-e DISPLAY="\${DISPLAY:-:0}" \\
 	-e WAYLAND_DISPLAY="\${WAYLAND_DISPLAY:-}" \\
 	-e XDG_RUNTIME_DIR="/run/user/\$(id -u)" \\
