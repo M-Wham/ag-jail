@@ -64,12 +64,14 @@ echo -e "${YELLOW}[3/7] Creating container...${NC}"
 # before Wayland support was added), remove it so it gets recreated correctly.
 CONTAINER_NEEDS_CREATE=true
 if podman ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
-	if podman inspect "$CONTAINER_NAME" --format '{{range .Mounts}}{{.Source}} {{end}}' 2>/dev/null \
-		| grep -q "/run/user/$HOST_UID"; then
+	# Check that the container has all required mounts (rw runtime dir and GPU access)
+	MOUNTS=$(podman inspect "$CONTAINER_NAME" --format '{{range .Mounts}}{{.Source}}:{{.RW}} {{end}}' 2>/dev/null)
+	DEVICES=$(podman inspect "$CONTAINER_NAME" --format '{{range .HostConfig.Devices}}{{.PathOnHost}} {{end}}' 2>/dev/null)
+	if echo "$MOUNTS" | grep -q "/run/user/$HOST_UID:true" && echo "$DEVICES" | grep -q "/dev/dri"; then
 		echo "Container already exists with correct configuration, skipping creation." >>"$LOG_FILE"
 		CONTAINER_NEEDS_CREATE=false
 	else
-		echo "Container missing display mounts, recreating..." | tee -a "$LOG_FILE"
+		echo "Container configuration outdated, recreating..." | tee -a "$LOG_FILE"
 		podman stop "$CONTAINER_NAME" >>"$LOG_FILE" 2>/dev/null || true
 		podman rm "$CONTAINER_NAME" >>"$LOG_FILE" 2>&1
 	fi
@@ -81,9 +83,10 @@ if [ "$CONTAINER_NEEDS_CREATE" = true ]; then
 		--hostname ag-jail \
 		--init \
 		--userns=keep-id \
+		--device /dev/dri \
 		-v "$JAIL_DIR:/home/$HOST_USER:z" \
 		-v /tmp/.X11-unix:/tmp/.X11-unix:ro \
-		-v "/run/user/$HOST_UID:/run/user/$HOST_UID:ro" \
+		-v "/run/user/$HOST_UID:/run/user/$HOST_UID:rw" \
 		-e DISPLAY="${DISPLAY:-:0}" \
 		-e WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-}" \
 		-e XDG_RUNTIME_DIR="/run/user/$HOST_UID" \
