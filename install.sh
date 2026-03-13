@@ -198,6 +198,9 @@ cat >"$BIN_DIR/ag-start" <<SCRIPT
 xhost +local: 2>/dev/null || true
 echo "Starting container..."
 podman start ag-safe
+# Remove stale Antigravity IPC sockets so a fresh instance always opens cleanly
+podman exec ag-safe pkill -9 antigravity 2>/dev/null || true
+rm -f /run/user/\$(id -u)/vscode-*.sock 2>/dev/null || true
 echo "Launching Antigravity..."
 podman exec \\
 	--user $HOST_USER \\
