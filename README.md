@@ -22,22 +22,22 @@ Only Podman is required.
 
 **Debian, Ubuntu, Linux Mint, Pop!_OS**
 ```bash
-sudo apt update && sudo apt install -y podman
+sudo apt update && sudo apt install -y podman x11-xserver-utils
 ```
 
 **Arch Linux, Manjaro, EndeavourOS**
 ```bash
-sudo pacman -S podman
+sudo pacman -S podman xorg-xhost
 ```
 
 **Fedora, CentOS, AlmaLinux**
 ```bash
-sudo dnf install -y podman
+sudo dnf install -y podman xorg-x11-server-utils
 ```
 
 **openSUSE**
 ```bash
-sudo zypper install -y podman
+sudo zypper install -y podman xhost
 ```
 
 ## Installation

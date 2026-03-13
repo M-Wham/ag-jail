@@ -37,7 +37,19 @@ if ! command -v podman &>/dev/null; then
 	exit 1
 fi
 if ! command -v xhost &>/dev/null; then
-	echo -e "${YELLOW}Warning: xhost not found. X11 display auth may not work correctly.${NC}"
+	echo -e "${YELLOW}xhost not found, attempting to install...${NC}"
+	if command -v pacman &>/dev/null; then
+		sudo pacman -S --noconfirm xorg-xhost >>"$LOG_FILE" 2>&1
+	elif command -v apt-get &>/dev/null; then
+		sudo apt-get install -y x11-xserver-utils >>"$LOG_FILE" 2>&1
+	elif command -v dnf &>/dev/null; then
+		sudo dnf install -y xorg-x11-server-utils >>"$LOG_FILE" 2>&1
+	elif command -v zypper &>/dev/null; then
+		sudo zypper install -y xhost >>"$LOG_FILE" 2>&1
+	else
+		echo -e "${RED}Could not install xhost automatically. Please install it manually for your distro.${NC}"
+		exit 1
+	fi
 fi
 
 # STEP 2: Directories
