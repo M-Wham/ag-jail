@@ -59,9 +59,23 @@ mkdir -p "$BIN_DIR"
 
 # STEP 3: Create container
 echo -e "${YELLOW}[3/7] Creating container...${NC}"
+
+# If the container exists but is missing the XDG runtime dir mount (e.g. was created
+# before Wayland support was added), remove it so it gets recreated correctly.
+CONTAINER_NEEDS_CREATE=true
 if podman ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
-	echo "Container already exists, skipping creation." >>"$LOG_FILE"
-else
+	if podman inspect "$CONTAINER_NAME" --format '{{range .Mounts}}{{.Source}} {{end}}' 2>/dev/null \
+		| grep -q "/run/user/$HOST_UID"; then
+		echo "Container already exists with correct configuration, skipping creation." >>"$LOG_FILE"
+		CONTAINER_NEEDS_CREATE=false
+	else
+		echo "Container missing display mounts, recreating..." | tee -a "$LOG_FILE"
+		podman stop "$CONTAINER_NAME" >>"$LOG_FILE" 2>/dev/null || true
+		podman rm "$CONTAINER_NAME" >>"$LOG_FILE" 2>&1
+	fi
+fi
+
+if [ "$CONTAINER_NEEDS_CREATE" = true ]; then
 	podman create \
 		--name "$CONTAINER_NAME" \
 		--hostname ag-jail \
@@ -69,7 +83,10 @@ else
 		--userns=keep-id \
 		-v "$JAIL_DIR:/home/$HOST_USER:z" \
 		-v /tmp/.X11-unix:/tmp/.X11-unix:ro \
+		-v "/run/user/$HOST_UID:/run/user/$HOST_UID:ro" \
 		-e DISPLAY="${DISPLAY:-:0}" \
+		-e WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-}" \
+		-e XDG_RUNTIME_DIR="/run/user/$HOST_UID" \
 		-e DBUS_SESSION_BUS_ADDRESS="" \
 		-e HOME="/home/$HOST_USER" \
 		-e USER="$HOST_USER" \
@@ -158,10 +175,14 @@ echo -e "${YELLOW}[7/7] Writing binaries...${NC}"
 cat >"$BIN_DIR/ag-start" <<SCRIPT
 #!/bin/bash
 xhost +local: 2>/dev/null || true
-podman start ag-safe > /dev/null
+echo "Starting container..."
+podman start ag-safe
+echo "Launching Antigravity..."
 podman exec \\
 	--user $HOST_USER \\
 	-e DISPLAY="\${DISPLAY:-:0}" \\
+	-e WAYLAND_DISPLAY="\${WAYLAND_DISPLAY:-}" \\
+	-e XDG_RUNTIME_DIR="/run/user/\$(id -u)" \\
 	-e DBUS_SESSION_BUS_ADDRESS="" \\
 	-e HOME="/home/$HOST_USER" \\
 	ag-safe \\
@@ -198,6 +219,8 @@ fi
 podman exec -it \\
 	--user $HOST_USER \\
 	-e DISPLAY="\${DISPLAY:-:0}" \\
+	-e WAYLAND_DISPLAY="\${WAYLAND_DISPLAY:-}" \\
+	-e XDG_RUNTIME_DIR="/run/user/\$(id -u)" \\
 	-e DBUS_SESSION_BUS_ADDRESS="" \\
 	-e HOME="/home/$HOST_USER" \\
 	ag-safe \\
