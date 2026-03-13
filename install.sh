@@ -83,6 +83,9 @@ if [ "$CONTAINER_NEEDS_CREATE" = true ]; then
 		--hostname ag-jail \
 		--init \
 		--userns=keep-id \
+		--network slirp4netns:allow_host_loopback=true \
+		--dns 1.1.1.1 \
+		--dns 8.8.8.8 \
 		--device /dev/dri \
 		-v "$JAIL_DIR:/home/$HOST_USER:z" \
 		-v /tmp/.X11-unix:/tmp/.X11-unix:ro \
