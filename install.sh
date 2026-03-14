@@ -206,7 +206,7 @@ find "$JAIL_DIR/.config/Antigravity" -name "*.json" -not -path "*/History/*" \
 	>>"$LOG_FILE" 2>&1 || true
 # Also fix paths stored in SQLite state databases (global + per-workspace)
 if command -v sqlite3 &>/dev/null; then
-	find "$JAIL_DIR/.config/Antigravity/User" -name "state.vscdb" | while read db; do
+	find "$JAIL_DIR/.config/Antigravity/User" \( -name "state.vscdb" -o -name "state.vscdb.backup" \) | while read db; do
 		sqlite3 "$db" \
 			"UPDATE ItemTable SET value = replace(replace(value, '/home/$HOST_USER/Antigravity-Jail/', '/home/$HOST_USER/'), '/home/$HOST_USER/Antigravity-Jail\"', '/home/$HOST_USER\"') WHERE value LIKE '%Antigravity-Jail%';" \
 			>>"$LOG_FILE" 2>&1 || true
