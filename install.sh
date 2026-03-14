@@ -81,7 +81,9 @@ CONTAINER_NEEDS_CREATE=true
 if podman ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
 	# Check that the container has all required mounts (rw runtime dir and GPU access)
 	MOUNTS=$(podman inspect "$CONTAINER_NAME" --format '{{range .Mounts}}{{.Source}}:{{.RW}} {{end}}' 2>/dev/null)
-	DEVICES=$(podman inspect "$CONTAINER_NAME" --format '{{range .HostConfig.Devices}}{{.PathOnHost}} {{end}}' 2>/dev/null)
+	# HostConfig.Devices is always empty in Podman for directory-level device passthrough;
+	# check the original create command args instead.
+	DEVICES=$(podman inspect "$CONTAINER_NAME" --format '{{join .Config.CreateCommand " "}}' 2>/dev/null)
 	if echo "$MOUNTS" | grep -q "/run/user/$HOST_UID:true" && echo "$DEVICES" | grep -q "/dev/dri"; then
 		echo "Container already exists with correct configuration, skipping creation." >>"$LOG_FILE"
 		CONTAINER_NEEDS_CREATE=false
@@ -212,7 +214,17 @@ podman exec \\
 	-e DBUS_SESSION_BUS_ADDRESS="" \\
 	-e HOME="/home/$HOST_USER" \\
 	ag-safe \\
-	bash -c 'cd /home/$HOST_USER && exec antigravity "\$@"' -- "\$@"
+	bash -c '
+cd /home/$HOST_USER
+antigravity "\$@"
+# The antigravity CLI (like all VS Code launchers) spawns the Electron GUI as a
+# detached orphan process and exits immediately. Wait for the real GUI to finish
+# before returning so that the container is not stopped prematurely.
+sleep 1
+while pgrep -u "\$(id -u)" -x antigravity > /dev/null 2>&1; do
+	sleep 2
+done
+' -- "\$@"
 podman stop ag-safe > /dev/null
 SCRIPT
 chmod +x "$BIN_DIR/ag-start"
