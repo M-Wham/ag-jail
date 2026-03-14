@@ -204,12 +204,13 @@ find "$JAIL_DIR/.config/Antigravity" -name "*.json" -not -path "*/History/*" \
 	-exec grep -ql "Antigravity-Jail" {} \; \
 	-exec sed -i "s|/home/$HOST_USER/Antigravity-Jail/|/home/$HOST_USER/|g" {} \; \
 	>>"$LOG_FILE" 2>&1 || true
-# Also fix paths stored in the global SQLite state database (recently opened list, etc.)
-GLOBAL_DB="$JAIL_DIR/.config/Antigravity/User/globalStorage/state.vscdb"
-if [ -f "$GLOBAL_DB" ] && command -v sqlite3 &>/dev/null; then
-	sqlite3 "$GLOBAL_DB" \
-		"UPDATE ItemTable SET value = replace(value, '/home/$HOST_USER/Antigravity-Jail/', '/home/$HOST_USER/') WHERE value LIKE '%Antigravity-Jail%';" \
-		>>"$LOG_FILE" 2>&1 || true
+# Also fix paths stored in SQLite state databases (global + per-workspace)
+if command -v sqlite3 &>/dev/null; then
+	find "$JAIL_DIR/.config/Antigravity/User" -name "state.vscdb" | while read db; do
+		sqlite3 "$db" \
+			"UPDATE ItemTable SET value = replace(value, '/home/$HOST_USER/Antigravity-Jail/', '/home/$HOST_USER/') WHERE value LIKE '%Antigravity-Jail%';" \
+			>>"$LOG_FILE" 2>&1 || true
+	done
 fi
 
 # STEP 7: Write binaries
