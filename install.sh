@@ -72,6 +72,12 @@ echo -e "${YELLOW}[2/7] Creating jail directory...${NC}"
 mkdir -p "$JAIL_DIR" >>"$LOG_FILE" 2>&1
 mkdir -p "$BIN_DIR"
 
+# Remove stale Distrobox-era aliases that would shadow the installed binaries
+for RC in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.bash_profile"; do
+	[ -f "$RC" ] || continue
+	sed -i '/^alias ag-start="distrobox /d;/^alias ag-kill="podman kill/d;/^alias ag-update="distrobox /d' "$RC"
+done
+
 # STEP 3: Create container
 echo -e "${YELLOW}[3/7] Creating container...${NC}"
 
@@ -273,6 +279,11 @@ echo "  ag-start  — launch the IDE"
 echo "  ag-kill   — stop the container"
 echo "  ag-enter  — open a shell in the container (for installs/debugging)"
 echo "  ag-update — update Antigravity and ungoogled-chromium"
+
+# Always remind to open a new terminal — shell aliases from old installs survive
+# in the current session even after .bashrc is edited.
+echo -e "\n${YELLOW}ACTION REQUIRED:${NC} Open a new terminal before running ag-start."
+echo "Existing terminals may still have old aliases that will intercept the commands."
 
 # PATH check
 if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
