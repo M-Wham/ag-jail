@@ -211,6 +211,14 @@ if command -v sqlite3 &>/dev/null; then
 			"UPDATE ItemTable SET value = replace(replace(value, '/home/$HOST_USER/Antigravity-Jail/', '/home/$HOST_USER/'), '/home/$HOST_USER/Antigravity-Jail\"', '/home/$HOST_USER\"') WHERE value LIKE '%Antigravity-Jail%';" \
 			>>"$LOG_FILE" 2>&1 || true
 	done
+	# sidebarWorkspaces and scratchWorkspaces are protobuf blobs — can't text-replace,
+	# so delete them. Antigravity resets them to empty on next launch.
+	GLOBAL_DB="$JAIL_DIR/.config/Antigravity/User/globalStorage/state.vscdb"
+	if [ -f "$GLOBAL_DB" ]; then
+		sqlite3 "$GLOBAL_DB" \
+			"DELETE FROM ItemTable WHERE key IN ('antigravityUnifiedStateSync.sidebarWorkspaces', 'antigravityUnifiedStateSync.scratchWorkspaces');" \
+			>>"$LOG_FILE" 2>&1 || true
+	fi
 fi
 
 # STEP 7: Write binaries
