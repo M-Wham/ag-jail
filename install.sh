@@ -117,7 +117,8 @@ if [ "$CONTAINER_NEEDS_CREATE" = true ]; then
 		-e DISPLAY="${DISPLAY:-:0}" \
 		-e WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-}" \
 		-e XDG_RUNTIME_DIR="/run/user/$HOST_UID" \
-		-e DBUS_SESSION_BUS_ADDRESS="" \
+		-e DBUS_SESSION_BUS_ADDRESS="unix:path=/tmp/no-dbus-in-container" \
+		-e GTK_USE_PORTAL=0 \
 		-e HOME="/home/$HOST_USER" \
 		-e USER="$HOST_USER" \
 		"$UBUNTU_IMAGE" \
@@ -244,7 +245,8 @@ podman exec \\
 	-e DISPLAY="\${DISPLAY:-:0}" \\
 	-e WAYLAND_DISPLAY="\${WAYLAND_DISPLAY:-}" \\
 	-e XDG_RUNTIME_DIR="/run/user/\$(id -u)" \\
-	-e DBUS_SESSION_BUS_ADDRESS="" \\
+	-e DBUS_SESSION_BUS_ADDRESS="unix:path=/tmp/no-dbus-in-container" \\
+	-e GTK_USE_PORTAL=0 \\
 	-e HOME="/home/$HOST_USER" \\
 	ag-safe \\
 	bash -c '
@@ -293,7 +295,8 @@ podman exec -it \\
 	-e DISPLAY="\${DISPLAY:-:0}" \\
 	-e WAYLAND_DISPLAY="\${WAYLAND_DISPLAY:-}" \\
 	-e XDG_RUNTIME_DIR="/run/user/\$(id -u)" \\
-	-e DBUS_SESSION_BUS_ADDRESS="" \\
+	-e DBUS_SESSION_BUS_ADDRESS="unix:path=/tmp/no-dbus-in-container" \\
+	-e GTK_USE_PORTAL=0 \\
 	-e HOME="/home/$HOST_USER" \\
 	ag-safe \\
 	bash
