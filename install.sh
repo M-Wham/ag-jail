@@ -117,7 +117,7 @@ if [ "$CONTAINER_NEEDS_CREATE" = true ]; then
 		-e DISPLAY="${DISPLAY:-:0}" \
 		-e WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-}" \
 		-e XDG_RUNTIME_DIR="/run/user/$HOST_UID" \
-		-e DBUS_SESSION_BUS_ADDRESS="unix:path=/tmp/no-dbus-in-container" \
+		-e DBUS_SESSION_BUS_ADDRESS="" \
 		-e GTK_USE_PORTAL=0 \
 		-e HOME="/home/$HOST_USER" \
 		-e USER="$HOST_USER" \
@@ -138,7 +138,7 @@ podman exec --user root "$CONTAINER_NAME" bash -c "
 
 	apt-get update -qq
 	DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-		sudo curl wget gnupg ca-certificates software-properties-common
+		sudo curl wget gnupg ca-certificates software-properties-common dbus
 
 	# Grant passwordless sudo to jail user for ag-update/etc.
 	echo '${HOST_USER} ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/ag-jail
@@ -160,14 +160,31 @@ podman exec --user root "$CONTAINER_NAME" bash -c "
 		echo 'ungoogled-chromium already installed, skipping.' >&2
 	fi
 
-	# Replace xdg-open with a wrapper that always uses ungoogled-chromium.
+	# Create a container-safe chromium wrapper that injects flags required to run
+	# inside a Podman container: --no-sandbox (no user namespaces available) and
+	# --disable-dev-shm-usage (/dev/shm is too small by default).
+	# All browser entry points (xdg-open, named aliases, Antigravity agent setting)
+	# go through this wrapper so the flags are always present.
+	cat > /usr/local/bin/ag-chromium << 'WRAPPER'
+#!/bin/sh
+exec /usr/bin/ungoogled-chromium --no-sandbox --disable-dev-shm-usage --disable-gpu \"\$@\" 2>/dev/null
+WRAPPER
+	chmod +x /usr/local/bin/ag-chromium
+
+	# Replace xdg-open with a wrapper that always uses ag-chromium.
 	# /usr/local/bin takes priority over /usr/bin, so this shadows the real xdg-open.
 	# This is the key fix for preventing Antigravity from opening the host browser via D-Bus.
 	cat > /usr/local/bin/xdg-open << 'WRAPPER'
 #!/bin/sh
-exec ungoogled-chromium \"\$@\" 2>/dev/null
+exec /usr/local/bin/ag-chromium \"\$@\"
 WRAPPER
 	chmod +x /usr/local/bin/xdg-open
+
+	# Symlink common Chrome binary names to ag-chromium so Antigravity's browser
+	# auto-detection finds a working binary.
+	ln -sf /usr/local/bin/ag-chromium /usr/local/bin/google-chrome
+	ln -sf /usr/local/bin/ag-chromium /usr/local/bin/chromium-browser
+	ln -sf /usr/local/bin/ag-chromium /usr/local/bin/chromium
 " 2>&1 | tee -a "$LOG_FILE"
 
 # STEP 6: Install Antigravity
@@ -220,6 +237,22 @@ if command -v sqlite3 &>/dev/null; then
 			"DELETE FROM ItemTable WHERE key IN ('antigravityUnifiedStateSync.sidebarWorkspaces', 'antigravityUnifiedStateSync.scratchWorkspaces');" \
 			>>"$LOG_FILE" 2>&1 || true
 	fi
+
+fi
+
+# Clear GPU/shader caches from the Antigravity agent browser profile.
+# These caches are built against the host GPU and cause ungoogled-chromium to
+# crash (SIGTRAP) when run inside the container where DRM access is restricted.
+# Chromium rebuilds them automatically on next launch using software rendering.
+BROWSER_PROFILE="$JAIL_DIR/.gemini/antigravity-browser-profile"
+if [ -d "$BROWSER_PROFILE" ]; then
+	rm -rf \
+		"$BROWSER_PROFILE/GPUPersistentCache" \
+		"$BROWSER_PROFILE/GrShaderCache" \
+		"$BROWSER_PROFILE/GraphiteDawnCache" \
+		"$BROWSER_PROFILE/ShaderCache" \
+		>>"$LOG_FILE" 2>&1 || true
+	echo "Cleared GPU caches from agent browser profile." >>"$LOG_FILE"
 fi
 
 # STEP 7: Write binaries
@@ -245,11 +278,11 @@ podman exec \\
 	-e DISPLAY="\${DISPLAY:-:0}" \\
 	-e WAYLAND_DISPLAY="\${WAYLAND_DISPLAY:-}" \\
 	-e XDG_RUNTIME_DIR="/run/user/\$(id -u)" \\
-	-e DBUS_SESSION_BUS_ADDRESS="unix:path=/tmp/no-dbus-in-container" \\
+	-e DBUS_SESSION_BUS_ADDRESS="" \\
 	-e GTK_USE_PORTAL=0 \\
 	-e HOME="/home/$HOST_USER" \\
 	ag-safe \\
-	bash -c '
+	dbus-run-session -- bash -c '
 cd /home/$HOST_USER
 antigravity "\$@"
 # The antigravity CLI (like all VS Code launchers) spawns the Electron GUI as a
@@ -295,7 +328,7 @@ podman exec -it \\
 	-e DISPLAY="\${DISPLAY:-:0}" \\
 	-e WAYLAND_DISPLAY="\${WAYLAND_DISPLAY:-}" \\
 	-e XDG_RUNTIME_DIR="/run/user/\$(id -u)" \\
-	-e DBUS_SESSION_BUS_ADDRESS="unix:path=/tmp/no-dbus-in-container" \\
+	-e DBUS_SESSION_BUS_ADDRESS="" \\
 	-e GTK_USE_PORTAL=0 \\
 	-e HOME="/home/$HOST_USER" \\
 	ag-safe \\
@@ -314,6 +347,12 @@ echo "  ag-update — update Antigravity and ungoogled-chromium"
 # in the current session even after .bashrc is edited.
 echo -e "\n${YELLOW}ACTION REQUIRED:${NC} Open a new terminal before running ag-start."
 echo "Existing terminals may still have old aliases that will intercept the commands."
+
+echo -e "\n${YELLOW}ANTIGRAVITY BROWSER SETUP:${NC}"
+echo "To use the Antigravity agent browser tools, set the Chrome binary path in"
+echo "Antigravity settings (Browser section) to:"
+echo -e "  ${GREEN}/usr/local/bin/ag-chromium${NC}"
+echo "This wrapper enables ungoogled-chromium to run inside the container."
 
 # PATH check
 if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
