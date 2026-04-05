@@ -11,7 +11,7 @@ JAIL_DIR="$HOME/Antigravity-Jail"
 CONTAINER_NAME="ag-safe"
 BIN_DIR="$HOME/.local/bin"
 LOG_FILE="$PWD/install.log"
-UBUNTU_IMAGE="public.ecr.aws/lts/ubuntu:22.04"
+UBUNTU_IMAGE="public.ecr.aws/lts/ubuntu:24.04"
 
 HOST_UID=$(id -u)
 HOST_GID=$(id -g)
@@ -23,6 +23,22 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
+# Install a package using the host package manager.
+# Args: <pacman-name> <apt-name> <dnf-name> <zypper-name>
+pkg_install() {
+	if command -v pacman &>/dev/null; then
+		sudo pacman -S --noconfirm "$1" >>"$LOG_FILE" 2>&1
+	elif command -v apt-get &>/dev/null; then
+		sudo apt-get install -y "$2" >>"$LOG_FILE" 2>&1
+	elif command -v dnf &>/dev/null; then
+		sudo dnf install -y "$3" >>"$LOG_FILE" 2>&1
+	elif command -v zypper &>/dev/null; then
+		sudo zypper install -y "$4" >>"$LOG_FILE" 2>&1
+	else
+		return 1
+	fi
+}
+
 # Clear log file
 >"$LOG_FILE"
 
@@ -31,44 +47,35 @@ echo "Detailed logs are being saved to: $LOG_FILE"
 echo ""
 
 # STEP 1: Dependencies
-echo -e "${YELLOW}[1/7] Checking dependencies...${NC}"
+echo -e "${YELLOW}[1/5] Checking dependencies...${NC}"
 if ! command -v podman &>/dev/null; then
 	echo -e "${RED}Error: Podman is not installed. Please install podman first.${NC}"
 	exit 1
 fi
-if ! command -v slirp4netns &>/dev/null; then
+if ! command -v slirp4netns &>/dev/null && ! command -v pasta &>/dev/null; then
 	echo -e "${YELLOW}slirp4netns not found, attempting to install...${NC}"
-	if command -v pacman &>/dev/null; then
-		sudo pacman -S --noconfirm slirp4netns >>"$LOG_FILE" 2>&1
-	elif command -v apt-get &>/dev/null; then
-		sudo apt-get install -y slirp4netns >>"$LOG_FILE" 2>&1
-	elif command -v dnf &>/dev/null; then
-		sudo dnf install -y slirp4netns >>"$LOG_FILE" 2>&1
-	elif command -v zypper &>/dev/null; then
-		sudo zypper install -y slirp4netns >>"$LOG_FILE" 2>&1
-	else
+	if ! pkg_install slirp4netns slirp4netns slirp4netns slirp4netns; then
 		echo -e "${RED}Could not install slirp4netns automatically. Please install it manually.${NC}"
 		exit 1
 	fi
 fi
 if ! command -v xhost &>/dev/null; then
 	echo -e "${YELLOW}xhost not found, attempting to install...${NC}"
-	if command -v pacman &>/dev/null; then
-		sudo pacman -S --noconfirm xorg-xhost >>"$LOG_FILE" 2>&1
-	elif command -v apt-get &>/dev/null; then
-		sudo apt-get install -y x11-xserver-utils >>"$LOG_FILE" 2>&1
-	elif command -v dnf &>/dev/null; then
-		sudo dnf install -y xorg-x11-server-utils >>"$LOG_FILE" 2>&1
-	elif command -v zypper &>/dev/null; then
-		sudo zypper install -y xhost >>"$LOG_FILE" 2>&1
-	else
+	if ! pkg_install xorg-xhost x11-xserver-utils xorg-x11-server-utils xhost; then
 		echo -e "${RED}Could not install xhost automatically. Please install it manually for your distro.${NC}"
 		exit 1
 	fi
 fi
 
+# Choose network backend: pasta is faster (kernel-backed), slirp4netns is the fallback
+if command -v pasta &>/dev/null; then
+	NET_MODE="pasta"
+else
+	NET_MODE="slirp4netns:allow_host_loopback=true"
+fi
+
 # STEP 2: Directories
-echo -e "${YELLOW}[2/7] Creating jail directory...${NC}"
+echo -e "${YELLOW}[2/5] Creating jail directory...${NC}"
 mkdir -p "$JAIL_DIR" >>"$LOG_FILE" 2>&1
 mkdir -p "$BIN_DIR"
 
@@ -79,7 +86,7 @@ for RC in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.bash_profile"; do
 done
 
 # STEP 3: Create container
-echo -e "${YELLOW}[3/7] Creating container...${NC}"
+echo -e "${YELLOW}[3/5] Creating container...${NC}"
 
 # If the container exists but is missing the XDG runtime dir mount (e.g. was created
 # before Wayland support was added), remove it so it gets recreated correctly.
@@ -89,8 +96,8 @@ if podman ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
 	MOUNTS=$(podman inspect "$CONTAINER_NAME" --format '{{range .Mounts}}{{.Source}}:{{.RW}} {{end}}' 2>/dev/null)
 	# HostConfig.Devices is always empty in Podman for directory-level device passthrough;
 	# check the original create command args instead.
-	DEVICES=$(podman inspect "$CONTAINER_NAME" --format '{{join .Config.CreateCommand " "}}' 2>/dev/null)
-	if echo "$MOUNTS" | grep -q "/run/user/$HOST_UID:true" && echo "$DEVICES" | grep -q "/dev/dri"; then
+	CREATE_CMD=$(podman inspect "$CONTAINER_NAME" --format '{{join .Config.CreateCommand " "}}' 2>/dev/null)
+	if echo "$MOUNTS" | grep -q "/run/user/$HOST_UID:true" && echo "$CREATE_CMD" | grep -q "/dev/dri" && echo "$CREATE_CMD" | grep -q "$NET_MODE"; then
 		echo "Container already exists with correct configuration, skipping creation." >>"$LOG_FILE"
 		CONTAINER_NEEDS_CREATE=false
 	else
@@ -107,10 +114,11 @@ if [ "$CONTAINER_NEEDS_CREATE" = true ]; then
 		--init \
 		--userns=keep-id \
 		--workdir / \
-		--network slirp4netns:allow_host_loopback=true \
+		--network "$NET_MODE" \
 		--dns 1.1.1.1 \
 		--dns 8.8.8.8 \
 		--device /dev/dri \
+		--shm-size=1g \
 		-v "$JAIL_DIR:/home/$HOST_USER:z" \
 		-v /tmp/.X11-unix:/tmp/.X11-unix:ro \
 		-v "/run/user/$HOST_UID:/run/user/$HOST_UID:rw" \
@@ -125,17 +133,31 @@ if [ "$CONTAINER_NEEDS_CREATE" = true ]; then
 		tail -f /dev/null >>"$LOG_FILE" 2>&1
 fi
 
-# STEP 4: Container base setup
-echo -e "${YELLOW}[4/7] Setting up container environment...${NC}"
+# STEP 4: Install everything inside the container
+echo -e "${YELLOW}[4/5] Setting up container environment...${NC}"
+echo "This step may take a few minutes..."
 podman start "$CONTAINER_NAME" >>"$LOG_FILE" 2>&1
 
 podman exec --user root "$CONTAINER_NAME" bash -c "
 	set -e
-	# Fix home directory in /etc/passwd (Podman auto-creates entry with home=/)
-	if grep -q '^${HOST_USER}:' /etc/passwd; then
-		usermod -d /home/${HOST_USER} -s /bin/bash ${HOST_USER} 2>/dev/null || true
+
+	# Ensure the container user is named after the host user.
+	# Ubuntu 24.04 images ship a built-in 'ubuntu' user at UID 1000. With
+	# --userns=keep-id the host UID maps directly, so we need the name to match.
+	# Rename any existing user at HOST_UID that isn't already named correctly,
+	# or create the user from scratch if the UID is absent.
+	if getent passwd ${HOST_UID} > /dev/null 2>&1; then
+		EXISTING=$(getent passwd ${HOST_UID} | cut -d: -f1)
+		if [ "\$EXISTING" != "${HOST_USER}" ]; then
+			usermod -l ${HOST_USER} -d /home/${HOST_USER} -s /bin/bash "\$EXISTING" 2>/dev/null || true
+		else
+			usermod -d /home/${HOST_USER} -s /bin/bash ${HOST_USER} 2>/dev/null || true
+		fi
+	else
+		useradd -u ${HOST_UID} -g ${HOST_GID} -d /home/${HOST_USER} -s /bin/bash -M ${HOST_USER} 2>/dev/null || true
 	fi
 
+	# Base packages
 	apt-get update -qq
 	DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
 		sudo curl wget gnupg ca-certificates software-properties-common dbus
@@ -143,13 +165,8 @@ podman exec --user root "$CONTAINER_NAME" bash -c "
 	# Grant passwordless sudo to jail user for ag-update/etc.
 	echo '${HOST_USER} ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/ag-jail
 	chmod 440 /etc/sudoers.d/ag-jail
-" 2>&1 | tee -a "$LOG_FILE"
 
-# STEP 5: Install ungoogled-chromium
-echo -e "${YELLOW}[5/7] Installing ungoogled-chromium...${NC}"
-echo "This step may take a few minutes..."
-podman exec --user root "$CONTAINER_NAME" bash -c "
-	set -e
+	# Install ungoogled-chromium
 	if ! command -v ungoogled-chromium > /dev/null 2>&1; then
 		echo 'Adding xtradeb PPA...' >&2
 		add-apt-repository -y ppa:xtradeb/apps
@@ -160,37 +177,28 @@ podman exec --user root "$CONTAINER_NAME" bash -c "
 		echo 'ungoogled-chromium already installed, skipping.' >&2
 	fi
 
-	# Create a container-safe chromium wrapper that injects flags required to run
-	# inside a Podman container: --no-sandbox (no user namespaces available) and
-	# --disable-dev-shm-usage (/dev/shm is too small by default).
-	# All browser entry points (xdg-open, named aliases, Antigravity agent setting)
-	# go through this wrapper so the flags are always present.
+	# Container-safe chromium wrapper: --no-sandbox is required because Podman
+	# containers have no inner user namespace for the sandbox. GPU and shm are
+	# handled at the container level (--device /dev/dri, --shm-size=1g).
 	cat > /usr/local/bin/ag-chromium << 'WRAPPER'
 #!/bin/sh
-exec /usr/bin/ungoogled-chromium --no-sandbox --disable-dev-shm-usage --disable-gpu \"\$@\" 2>/dev/null
+exec /usr/bin/ungoogled-chromium --no-sandbox \"\$@\" 2>/dev/null
 WRAPPER
 	chmod +x /usr/local/bin/ag-chromium
 
-	# Replace xdg-open with a wrapper that always uses ag-chromium.
-	# /usr/local/bin takes priority over /usr/bin, so this shadows the real xdg-open.
-	# This is the key fix for preventing Antigravity from opening the host browser via D-Bus.
+	# Replace xdg-open so Antigravity cannot escape to the host browser via D-Bus.
 	cat > /usr/local/bin/xdg-open << 'WRAPPER'
 #!/bin/sh
 exec /usr/local/bin/ag-chromium \"\$@\"
 WRAPPER
 	chmod +x /usr/local/bin/xdg-open
 
-	# Symlink common Chrome binary names to ag-chromium so Antigravity's browser
-	# auto-detection finds a working binary.
+	# Symlink common Chrome binary names so Antigravity's auto-detection works.
 	ln -sf /usr/local/bin/ag-chromium /usr/local/bin/google-chrome
 	ln -sf /usr/local/bin/ag-chromium /usr/local/bin/chromium-browser
 	ln -sf /usr/local/bin/ag-chromium /usr/local/bin/chromium
-" 2>&1 | tee -a "$LOG_FILE"
 
-# STEP 6: Install Antigravity
-echo -e "${YELLOW}[6/7] Installing Antigravity...${NC}"
-podman exec --user root "$CONTAINER_NAME" bash -c "
-	set -e
+	# Install Antigravity
 	if ! command -v antigravity > /dev/null 2>&1; then
 		echo 'Adding Antigravity repository...' >&2
 		mkdir -p /etc/apt/keyrings
@@ -200,7 +208,6 @@ podman exec --user root "$CONTAINER_NAME" bash -c "
 		echo 'deb [signed-by=/etc/apt/keyrings/antigravity-repo-key.gpg] https://us-central1-apt.pkg.dev/projects/antigravity-auto-updater-dev antigravity-debian main' | \
 			tee /etc/apt/sources.list.d/antigravity.list > /dev/null
 
-		echo 'Installing Antigravity...' >&2
 		apt-get update -qq
 		DEBIAN_FRONTEND=noninteractive apt-get install -y antigravity
 		echo 'Antigravity installed.' >&2
@@ -217,6 +224,7 @@ podman stop "$CONTAINER_NAME" >>"$LOG_FILE" 2>&1
 # different container where the home was not yet remapped, causing it to store
 # paths like file:///home/$HOST_USER/Antigravity-Jail/Project instead of the
 # correct container-internal file:///home/$HOST_USER/Project.
+if [ -d "$JAIL_DIR/.config/Antigravity" ]; then
 echo -e "${YELLOW}Migrating workspace paths...${NC}"
 find "$JAIL_DIR/.config/Antigravity" -name "*.json" -not -path "*/History/*" \
 	-exec grep -ql "Antigravity-Jail" {} \; \
@@ -241,9 +249,8 @@ if command -v sqlite3 &>/dev/null; then
 fi
 
 # Clear GPU/shader caches from the Antigravity agent browser profile.
-# These caches are built against the host GPU and cause ungoogled-chromium to
-# crash (SIGTRAP) when run inside the container where DRM access is restricted.
-# Chromium rebuilds them automatically on next launch using software rendering.
+# These caches may be stale (built against a different GPU context) and can cause
+# ungoogled-chromium to crash (SIGTRAP) on first run. Chromium rebuilds them automatically.
 BROWSER_PROFILE="$JAIL_DIR/.gemini/antigravity-browser-profile"
 if [ -d "$BROWSER_PROFILE" ]; then
 	rm -rf \
@@ -254,9 +261,10 @@ if [ -d "$BROWSER_PROFILE" ]; then
 		>>"$LOG_FILE" 2>&1 || true
 	echo "Cleared GPU caches from agent browser profile." >>"$LOG_FILE"
 fi
+fi # end: [ -d "$JAIL_DIR/.config/Antigravity" ]
 
-# STEP 7: Write binaries
-echo -e "${YELLOW}[7/7] Writing binaries...${NC}"
+# STEP 5: Write binaries
+echo -e "${YELLOW}[5/5] Writing binaries...${NC}"
 
 # ag-start: launches Antigravity in the sandbox
 # - Allows local X11 connections
@@ -312,6 +320,10 @@ podman start ag-safe > /dev/null
 podman exec --user root ag-safe \
 	sh -c "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y antigravity ungoogled-chromium"
 podman stop ag-safe > /dev/null
+echo ""
+echo "Update complete."
+echo "NOTE: If Antigravity prompts you to set the Chrome binary path, enter:"
+echo "  /usr/local/bin/ag-chromium"
 SCRIPT
 chmod +x "$BIN_DIR/ag-update"
 
